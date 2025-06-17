@@ -1,48 +1,229 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'tambahRelasi.dart'; // Import halaman untuk menambah relasi
 import 'detailLokasi.dart'; // Import halaman detail lokasi
-import 'package:project_caps/widgets/family_member.dart';
+import 'package:project_caps/widgets/family_member.dart'; // Pastikan path ini benar
+import 'package:project_caps/pages/listPermintaanRelasi.dart'; // Import FamilyRelationRequestPage
 
 class LiveTrackerPage extends StatefulWidget {
+  const LiveTrackerPage({super.key});
+
   @override
   _LiveTrackerPageState createState() => _LiveTrackerPageState();
 }
 
 class _LiveTrackerPageState extends State<LiveTrackerPage> {
-  // Inisialisasi daftar anggota keluarga dengan data yang konsisten
-  List<FamilyMember> familyMembers = [
-    FamilyMember(
-      name: 'Najwa',
-      location: 'Al Haram, Makkah 24231, Arab Saudi',
-      distance: 'Berjarak 100km',
-      lastUpdated: '20j yang lalu',
-      latitude: 21.4225, // Example latitude for Mecca
-      longitude: 39.8262, // Example longitude for Mecca
-    ),
-    // Pastikan Eka dan Budi juga diinisialisasi dengan properti nullable
-    FamilyMember(
-      name: 'Eka',
-      location: 'Jabal Nur, Makkah 24231, Arab Saudi',
-      distance: 'Berjarak 50km',
-      lastUpdated: '1h yang lalu',
-      latitude: 21.4225, // Contoh koordinat untuk Eka
-      longitude: 39.8262, // Contoh koordinat untuk Eka
-    ),
-    FamilyMember(
-      name: 'Budi',
-      location: 'Jannat al-Mu\'alla, Makkah 24231, Arab Saudi',
-      distance: 'Berjarak 10km',
-      lastUpdated: '30m yang lalu',
-      latitude: 21.4225, // Contoh koordinat untuk Budi
-      longitude: 39.8262, // Contoh koordinat untuk Budi
-    ),
-  ];
+  List<FamilyMember> familyMembers = [];
+  List<Map<String, dynamic>> incomingRelationRequests =
+      []; // Untuk badge notifikasi
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  // Metode untuk menambahkan anggota keluarga baru
-  void _addFamilyMember(FamilyMember newMember) {
+  late final SupabaseClient _supabase;
+  late final Stream<List<Map<String, dynamic>>>
+      _acceptedRelationsRawStream; // Stream untuk relasi aktif
+  late final Stream<List<Map<String, dynamic>>>
+      _relationRequestsRawStream; // Stream untuk permintaan masuk (badge)
+
+  @override
+  void initState() {
+    super.initState();
+    _supabase = Supabase.instance.client;
+    _initializeStreams(); // Setup Realtime listeners
+    _fetchData(); // Initial fetch for both family members and pending requests count
+  }
+
+  @override
+  void dispose() {
+    // Pastikan untuk membatalkan langganan stream saat widget di-dispose
+    // Pada versi supabase_flutter yang lebih baru, stream().listen() mengembalikan StreamSubscription.
+    // Jika Anda ingin mengelola disposal secara eksplisit, simpan StreamSubscription dan panggil .cancel() di dispose.
+    super.dispose();
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _initializeStreams() {
+    final currentUserEmail = _supabase.auth.currentUser?.email;
+    final currentUserId = _supabase.auth.currentUser?.id;
+
+    if (currentUserEmail != null && currentUserId != null) {
+      // Stream untuk relasi keluarga yang sudah diterima (status 'accepted')
+      _acceptedRelationsRawStream = _supabase
+          .from('family_relation_requests')
+          .stream(primaryKey: ['id']).order('updated_at', ascending: false);
+
+      _acceptedRelationsRawStream.listen((data) async {
+        List<String> relatedUserIds = [];
+        // Filter di sisi klien: relasi yang melibatkan pengguna saat ini dan berstatus 'accepted'
+        List<Map<String, dynamic>> filteredAccepted = data.where((request) {
+          return (request['requester_id'] == currentUserId ||
+                  request['recipient_email'] == currentUserEmail) &&
+              request['status'] == 'accepted';
+        }).toList();
+
+        for (var req in filteredAccepted) {
+          String idToFetch;
+          if (req['requester_id'] == currentUserId) {
+            // Jika saya requester, ID teman adalah ID dari recipient_email
+            // Kita perlu mengambil ID dari tabel profiles berdasarkan email recipient.
+            final recipientProfile = await _supabase
+                .from('profiles')
+                .select('id')
+                .eq('email', req['recipient_email'])
+                .limit(1)
+                .single();
+            idToFetch = recipientProfile['id'];
+          } else {
+            // Jika saya recipient, ID teman adalah requester_id
+            idToFetch = req['requester_id'];
+          }
+          if (!relatedUserIds.contains(idToFetch)) {
+            // Hindari duplikasi jika ada relasi dua arah
+            relatedUserIds.add(idToFetch);
+          }
+        }
+
+        // Ambil profil lengkap dari ID pengguna yang merupakan relasi keluarga aktif
+        if (relatedUserIds.isNotEmpty) {
+          final profilesResponse = await _supabase
+              .from('profiles')
+              .select() // Ambil semua kolom profil
+              .inFilter('id', relatedUserIds) // PERBAIKAN: Gunakan .inFilter()
+              .order('name', ascending: true);
+
+          setState(() {
+            familyMembers = profilesResponse
+                .map((json) => FamilyMember.fromJson(json))
+                .toList();
+          });
+        } else {
+          setState(() {
+            familyMembers = [];
+          });
+        }
+      }).onError((error) {
+        print('Error listening to accepted relations stream: $error');
+        setState(() {
+          _errorMessage = 'Error Realtime Relasi: ${error.toString()}';
+        });
+      });
+
+      // Stream untuk menghitung permintaan masuk (untuk badge notifikasi)
+      _relationRequestsRawStream = _supabase
+          .from('family_relation_requests')
+          .stream(primaryKey: ['id']).order('created_at', ascending: false);
+
+      _relationRequestsRawStream.listen((data) {
+        // Filter di sisi klien: permintaan yang masuk ke pengguna ini dan statusnya 'pending'
+        List<Map<String, dynamic>> filteredIncoming = data.where((request) {
+          return request['recipient_email'] == currentUserEmail &&
+              request['status'] == 'pending';
+        }).toList();
+
+        setState(() {
+          incomingRelationRequests =
+              filteredIncoming; // Update jumlah untuk badge
+        });
+      }).onError((error) {
+        print(
+            'Error listening to incoming relation requests for badge: $error');
+        setState(() {
+          _errorMessage = 'Error Realtime Permintaan: ${error.toString()}';
+        });
+      });
+    } else {
+      // If user is not logged in, set loading to false and show error
+      setState(() {
+        _errorMessage = 'Silakan login untuk melihat pelacak keluarga.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchData() async {
     setState(() {
-      familyMembers.add(newMember);
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null || currentUser.email == null) {
+      setState(() {
+        _errorMessage = 'Anda harus login untuk melihat data.';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      // Fetch data untuk badge notifikasi permintaan masuk
+      final incomingCount = await _supabase
+          .from('family_relation_requests')
+          .select()
+          .eq('recipient_email', currentUser.email!)
+          .eq('status', 'pending')
+          .order('created_at', ascending: false);
+      setState(() {
+        incomingRelationRequests = incomingCount;
+      });
+
+      // Fetch data untuk daftar relasi keluarga yang sudah diterima
+      final acceptedRequests = await _supabase
+          .from('family_relation_requests')
+          .select(
+              'requester_id, recipient_email') // Hanya ambil kolom yang diperlukan
+          .or('requester_id.eq.${currentUser.id},recipient_email.eq.${currentUser.email}')
+          .eq('status', 'accepted');
+
+      List<String> relatedUserIds = [];
+      for (var req in acceptedRequests) {
+        String idToFetch;
+        if (req['requester_id'] == currentUser.id) {
+          // Jika saya adalah requester, teman adalah recipient_email (perlu ID dari profiles)
+          final recipientProfile = await _supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', req['recipient_email'])
+              .limit(1)
+              .single(); // Gunakan .single()
+          idToFetch = recipientProfile['id'];
+        } else {
+          // Jika saya adalah recipient, teman adalah requester_id
+          idToFetch = req['requester_id'];
+        }
+        if (!relatedUserIds.contains(idToFetch)) {
+          relatedUserIds.add(idToFetch);
+        }
+      }
+
+      List<FamilyMember> fetchedMembers = [];
+      if (relatedUserIds.isNotEmpty) {
+        final profilesResponse = await _supabase
+            .from('profiles')
+            .select() // Ambil semua data profil
+            .inFilter('id', relatedUserIds) // PERBAIKAN: Gunakan .inFilter()
+            .order('name', ascending: true);
+        fetchedMembers = profilesResponse
+            .map((json) => FamilyMember.fromJson(json))
+            .toList();
+      }
+
+      setState(() {
+        familyMembers = fetchedMembers;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error memuat daftar relasi keluarga: ${e.toString()}';
+        _isLoading = false;
+      });
+      print('Error fetching data for LiveTrackerPage: ${e.toString()}');
+    }
   }
 
   @override
@@ -58,14 +239,40 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
         elevation: 0,
         foregroundColor: Colors.black,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none), // Ikon bel notifikasi
-            onPressed: () {
-              // Aksi saat ikon notifikasi ditekan
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notifikasi ditekan!')),
-              );
-            },
+          Stack(
+            // Gunakan Stack untuk badge notifikasi
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none),
+                onPressed: () {
+                  _showSnackbar('Notifikasi ditekan!');
+                },
+              ),
+              if (incomingRelationRequests.isNotEmpty)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 12,
+                      minHeight: 12,
+                    ),
+                    child: Text(
+                      '${incomingRelationRequests.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -77,37 +284,24 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Pilih anggota keluarga yang ingin dilacak atau tambah kontak anggota keluarga anda.',
+                  'Pilih anggota keluarga yang ingin dilacak atau tambah kontak anggota keluarga Anda.',
                   style: TextStyle(fontSize: 14, color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
-                    // Navigasi ke halaman AddRelationPage
-                    // Menerima hasil (nama) dari AddRelationPage
-                    final String? newName = await Navigator.push(
+                    await Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => AddRelationPage()),
+                      MaterialPageRoute(
+                          builder: (context) => const AddRelationPage()),
                     );
-                    if (newName != null && newName.isNotEmpty) {
-                      _addFamilyMember(FamilyMember(
-                        name: newName,
-                        location: 'Lokasi Tidak Diketahui', // Default jika tidak ada data
-                        distance: 'Tidak Diketahui',
-                        lastUpdated: 'Baru ditambahkan',
-                        latitude: null, // Default null
-                        longitude: null, // Default null
-                      ));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$newName ditambahkan ke daftar!')),
-                      );
-                    }
+                    _fetchData(); // Panggil _fetchData untuk refresh kedua daftar setelah kembali
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange, // Warna oranye sesuai gambar
-                    minimumSize: const Size(double.infinity, 50), // Lebar penuh, tinggi tetap
+                    backgroundColor: Colors.deepOrange,
+                    minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8), // Sudut membulat
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                   child: const Text(
@@ -116,46 +310,87 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const FamilyRelationRequestPage()),
+                    );
+                    _fetchData(); // Panggil _fetchData untuk refresh kedua daftar setelah kembali
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueGrey,
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Lihat Permintaan Relasi Keluarga (${incomingRelationRequests.length})',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: familyMembers.length,
-              itemBuilder: (context, index) {
-                final member = familyMembers[index];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: OutlinedButton( // Menggunakan OutlinedButton untuk efek border
-                    onPressed: () {
-                      // Navigasi ke halaman LocationDetailPage saat nama diklik
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => LocationDetailPage(member: member),
-                        ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey[300]!, width: 1), // Border abu-abu muda
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+                  ? Center(child: Text(_errorMessage!))
+                  : Expanded(
+                      child: RefreshIndicator(
+                        onRefresh:
+                            _fetchData, // Memuat ulang data saat pull-to-refresh
+                        child: familyMembers.isEmpty
+                            ? const Center(
+                                child: Text(
+                                    'Belum ada relasi keluarga yang aktif.'))
+                            : ListView.builder(
+                                itemCount: familyMembers.length,
+                                itemBuilder: (context, index) {
+                                  final member = familyMembers[index];
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16.0, vertical: 8.0),
+                                    child: OutlinedButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                LocationDetailPage(
+                                                    member: member),
+                                          ),
+                                        );
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        side: BorderSide(
+                                            color: Colors.grey[300]!, width: 1),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 16.0, horizontal: 12.0),
+                                        backgroundColor: Colors.white,
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          member.name,
+                                          style: const TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.black),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0),
-                      backgroundColor: Colors.white, // Latar belakang tombol putih
                     ),
-                    child: Align(
-                      alignment: Alignment.centerLeft, // Teks rata kiri di dalam tombol
-                      child: Text(
-                        member.name,
-                        style: const TextStyle(fontSize: 16, color: Colors.black),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
         ],
       ),
     );

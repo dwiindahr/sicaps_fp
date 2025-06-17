@@ -5,6 +5,8 @@ import 'settings.dart';
 import '/widgets/navbar.dart';
 
 class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
   @override
   _HomePageState createState() => _HomePageState();
 }
@@ -13,10 +15,10 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = [
-    HomeContent(), 
-    MeccaChatsPage(),
-    LiveTrackerPage(),
-    SettingsPage(),
+    const HomeContent(), 
+    const MeccaChatsPage(),
+    const LiveTrackerPage(),
+    const SettingsPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -38,13 +40,15 @@ class _HomePageState extends State<HomePage> {
 }
 
 class HomeContent extends StatelessWidget {
+  const HomeContent({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: Text(
+        title: const Text(
           'Home',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.normal),
         ),
@@ -59,7 +63,7 @@ class HomeContent extends StatelessWidget {
 
             },
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           DestinationCard(
             title: 'Ziarah Masjid Nabawi',
             imagePath: 'assets/images/madinah.webp', 
@@ -67,7 +71,7 @@ class HomeContent extends StatelessWidget {
 
             },
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           DestinationCard(
             title: 'Singgah Jeddah',
             imagePath: 'assets/images/jeddah.jpg',
@@ -87,11 +91,11 @@ class DestinationCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const DestinationCard({
-    Key? key,
+    super.key,
     required this.title,
     required this.imagePath,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +134,7 @@ class DestinationCard extends StatelessWidget {
                       Shadow(
                         blurRadius: 10.0,
                         color: Colors.black.withOpacity(0.5),
-                        offset: Offset(2.0, 2.0),
+                        offset: const Offset(2.0, 2.0),
                       ),
                     ],
                   ),

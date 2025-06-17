@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class MeccaChatsPage extends StatelessWidget {
+  const MeccaChatsPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,8 +71,8 @@ class MeccaChatsPage extends StatelessWidget {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
                 suffixIcon: Container(
                   margin: const EdgeInsets.only(right: 8.0),
-                  decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 102, 99, 93), 
+                  decoration: const BoxDecoration(
+                    color: Color.fromARGB(255, 102, 99, 93), 
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
