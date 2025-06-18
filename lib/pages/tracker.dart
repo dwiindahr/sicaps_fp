@@ -38,11 +38,11 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
     super.dispose();
   }
 
-  void _showSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
+  // void _showSnackbar(String message) {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(content: Text(message)),
+  //   );
+  // }
 
   void _initializeStreams() {
     final currentUserEmail = _supabase.auth.currentUser?.email;

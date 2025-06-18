@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:project_caps/widgets/family_member.dart';
 import 'package:flutter_osm_plugin/flutter_osm_plugin.dart';
-import 'package:project_caps/utils/distance_utils.dart'; // Pastikan ini ada dan berisi fungsi kalkulasi jarak
-import 'package:geolocator/geolocator.dart'; // Import geolocator package
+import 'package:project_caps/utils/distance_utils.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 class LocationDetailPage extends StatefulWidget {
   final FamilyMember member;
@@ -15,12 +17,19 @@ class LocationDetailPage extends StatefulWidget {
 
 class _LocationDetailPageState extends State<LocationDetailPage> {
   late MapController mapController;
-  GeoPoint? _currentUserLocation; // Untuk menyimpan lokasi pengguna saat ini
-  String _distanceToMember = 'Menghitung...'; // Untuk menampilkan jarak
+  GeoPoint? _currentUserLocation;
+  String _distanceToMember = 'Menghitung...';
+
+  FamilyMember? _currentMemberData;
+  StreamSubscription<List<Map<String, dynamic>>>? _memberLocationSubscription;
+
+  // Track the previous location of the member marker to remove it
+  GeoPoint? _previousMemberMarkerLocation; // <-- NEW: To track old marker position
 
   @override
   void initState() {
     super.initState();
+    _currentMemberData = widget.member;
 
     print('[LocationDetailPage] Initializing map for ${widget.member.name}');
     print(
@@ -28,17 +37,96 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
 
     mapController = MapController(
       initPosition: GeoPoint(
-        latitude: widget.member.latitude ?? 0.0,
-        longitude: widget.member.longitude ?? 0.0,
+        latitude: _currentMemberData!.latitude ?? 0.0,
+        longitude: _currentMemberData!.longitude ?? 0.0,
       ),
     );
 
-    _getCurrentLocationAndCalculateDistance(); // Panggil fungsi untuk mendapatkan lokasi dan menghitung jarak
+    _getCurrentLocationAndCalculateDistance();
+    _subscribeToMemberLocationUpdates();
   }
+
+  @override
+  void dispose() {
+    _memberLocationSubscription?.cancel();
+    mapController.dispose();
+    super.dispose();
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _subscribeToMemberLocationUpdates() {
+    final supabase = Supabase.instance.client;
+    _memberLocationSubscription = supabase
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.member.id)
+        .limit(1)
+        .order('lastUpdated', ascending: false)
+        .listen((data) {
+      if (data.isNotEmpty) {
+        final updatedData = data[0];
+        print('[LocationDetailPage] Realtime update received for ${widget.member.name}: $updatedData');
+
+        setState(() {
+          _currentMemberData = FamilyMember.fromJson(updatedData);
+        });
+
+        _updateMapWithNewMemberLocation(_currentMemberData!);
+        _getCurrentLocationAndCalculateDistance();
+      }
+    }, onError: (error) {
+      print('[LocationDetailPage] Realtime subscription error: $error');
+      _showSnackbar('Gagal memperbarui lokasi real-time: ${error.toString()}');
+    });
+  }
+
+  // --- MODIFIED FUNGSI: Perbarui marker dan tampilan peta ---
+  Future<void> _updateMapWithNewMemberLocation(FamilyMember member) async {
+    if (member.latitude != null && member.longitude != null) {
+      GeoPoint newMemberLocation = GeoPoint(
+        latitude: member.latitude!,
+        longitude: member.longitude!,
+      );
+      print('[LocationDetailPage] Updating map to new location: ${newMemberLocation.latitude}, ${newMemberLocation.longitude}');
+
+      // Remove the previous marker if it exists and its location is known
+      if (_previousMemberMarkerLocation != null) {
+        try {
+          await mapController.removeMarker(_previousMemberMarkerLocation!);
+          print('Removed previous marker at: ${_previousMemberMarkerLocation!.latitude}, ${_previousMemberMarkerLocation!.longitude}');
+        } catch (e) {
+          print('Error removing previous marker: $e');
+          // This can happen if the marker isn't actually on the map anymore,
+          // but we still try to add the new one.
+        }
+      }
+
+      // Add the new marker
+      await mapController.addMarker(
+        newMemberLocation,
+        markerIcon: const MarkerIcon(
+          icon: Icon(
+            Icons.person_pin,
+            color: Colors.red,
+            size: 45,
+          ),
+        ),
+      );
+      print('Added new marker at: ${newMemberLocation.latitude}, ${newMemberLocation.longitude}');
+
+      // Update the stored previous marker location
+      _previousMemberMarkerLocation = newMemberLocation;
+    }
+  }
+  // ---------------------------------------------------
 
   Future<void> _getCurrentLocationAndCalculateDistance() async {
     try {
-      // 1. Dapatkan lokasi pengguna saat ini
       Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
       setState(() {
@@ -50,15 +138,14 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
             '[LocationDetailPage] Current User Location: ${_currentUserLocation!.latitude}, ${_currentUserLocation!.longitude}');
       });
 
-      // 2. Jika lokasi anggota dan lokasi pengguna saat ini tersedia, hitung jarak
-      if (widget.member.latitude != null &&
-          widget.member.longitude != null &&
+      if (_currentMemberData?.latitude != null &&
+          _currentMemberData?.longitude != null &&
           _currentUserLocation != null) {
         double distanceInMeters = DistanceUtils.calculateDistance(
           _currentUserLocation!.latitude,
           _currentUserLocation!.longitude,
-          widget.member.latitude!,
-          widget.member.longitude!,
+          _currentMemberData!.latitude!,
+          _currentMemberData!.longitude!,
         );
 
         String formattedDistance;
@@ -90,10 +177,10 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
 
   Future<void> _onMapReady() async {
     print('[LocationDetailPage] onMapIsReady dipicu.');
-    if (widget.member.latitude != null && widget.member.longitude != null) {
+    if (_currentMemberData?.latitude != null && _currentMemberData?.longitude != null) {
       GeoPoint memberLocation = GeoPoint(
-        latitude: widget.member.latitude!,
-        longitude: widget.member.longitude!,
+        latitude: _currentMemberData!.latitude!,
+        longitude: _currentMemberData!.longitude!,
       );
 
       print(
@@ -102,7 +189,7 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
       await mapController.setZoom(zoomLevel: 15.0);
       print('[LocationDetailPage] Peta dipindahkan dan di-zoom.');
 
-      print('[LocationDetailPage] Menambahkan marker ke peta...');
+      // Add the initial marker and store its location
       await mapController.addMarker(
         memberLocation,
         markerIcon: const MarkerIcon(
@@ -113,7 +200,8 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
           ),
         ),
       );
-      print('Marker berhasil ditambahkan untuk ${widget.member.name}.');
+      _previousMemberMarkerLocation = memberLocation; // Store initial marker location
+      print('Initial marker added for ${widget.member.name}.');
     } else {
       print(
           'WARNING: Latitude atau Longitude adalah null untuk ${widget.member.name}. Marker TIDAK akan ditambahkan.');
@@ -122,12 +210,14 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final displayMember = _currentMemberData;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Detail Lokasi'),
         backgroundColor: Colors.white,
-        leading: IconButton( // <-- Tambahkan bagian ini
+        leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios),
           onPressed: () {
             Navigator.pop(context);
@@ -137,8 +227,8 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
       body: Column(
         children: [
           Expanded(
-            child: widget.member.latitude != null &&
-                    widget.member.longitude != null
+            child: displayMember?.latitude != null &&
+                    displayMember?.longitude != null
                 ? OSMFlutter(
                     controller: mapController,
                     osmOption: const OSMOption(
@@ -149,7 +239,7 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
                         stepZoom: 1.0,
                       ),
                       userTrackingOption: UserTrackingOption(
-                        enableTracking: true,
+                        enableTracking: false,
                       ),
                     ),
                     onMapIsReady: (isReady) {
@@ -168,12 +258,12 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.member.name,
+                  displayMember?.name ?? 'Nama Tidak Diketahui',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  widget.member.lastUpdated ?? 'N/A',
+                  displayMember?.lastUpdated ?? 'N/A',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -182,7 +272,7 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
                     const Icon(Icons.social_distance, size: 18),
                     const SizedBox(width: 4),
                     Text(
-                      _distanceToMember, // Tampilkan jarak yang sudah dihitung
+                      _distanceToMember,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -194,7 +284,7 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        widget.member.location ?? 'Lokasi tidak diketahui',
+                        displayMember?.location ?? 'Lokasi tidak diketahui',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
@@ -206,13 +296,13 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
         ],
       ),
       floatingActionButton:
-          (widget.member.latitude != null && widget.member.longitude != null)
+          (displayMember?.latitude != null && displayMember?.longitude != null)
               ? FloatingActionButton(
                   onPressed: () async {
                     print('[LocationDetailPage] Tombol Re-center ditekan.');
                     GeoPoint targetPoint = GeoPoint(
-                      latitude: widget.member.latitude!,
-                      longitude: widget.member.longitude!,
+                      latitude: displayMember!.latitude!,
+                      longitude: displayMember!.longitude!,
                     );
                     await mapController.moveTo(targetPoint);
                     await mapController.setZoom(zoomLevel: 15.0);

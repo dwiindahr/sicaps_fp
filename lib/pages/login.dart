@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/gestures.dart';
+import 'package:workmanager/workmanager.dart'; 
+import 'package:permission_handler/permission_handler.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -111,6 +113,87 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // =========================================================================
+  // FUNGSI BARU: Meminta Izin Lokasi Latar Belakang & Menjadwalkan Workmanager
+  // =========================================================================
+  Future<void> _requestLocationPermissionsAndScheduleTask() async {
+    print('[LoginScreen] Meminta izin lokasi dan menjadwalkan tugas Workmanager.');
+    try {
+      // 1. Cek apakah layanan lokasi diaktifkan di perangkat
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showSnackbar('Layanan lokasi dinonaktifkan. Mohon aktifkan di pengaturan perangkat Anda.');
+        return;
+      }
+
+      // 2. Meminta izin lokasi utama (WhenInUse atau Always, tergantung OS & pilihan awal)
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+          _showSnackbar('Izin lokasi ditolak. Pelacakan lokasi berkala tidak akan berfungsi.');
+          return;
+        }
+      }
+
+      // 3. KHUSUS untuk ACCESS_BACKGROUND_LOCATION (Android 10+ / API 29+) dan iOS 'Always'
+      if (Theme.of(context).platform == TargetPlatform.android &&
+          (await Permission.locationAlways.isDenied || await Permission.locationAlways.isRestricted)) {
+        // Tampilkan dialog penjelasan kepada pengguna mengapa izin "Always" diperlukan
+        bool? userUnderstood = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Izin Lokasi Latar Belakang"),
+            content: const Text("Untuk dapat memperbarui lokasi Anda secara berkala meskipun aplikasi ditutup, kami memerlukan izin lokasi 'Izinkan setiap saat'. Tanpa izin ini, pelacakan real-time tidak akan berfungsi."),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Tidak Sekarang")),
+              ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text("Lanjutkan")),
+            ],
+          ),
+        );
+
+        if (userUnderstood == true) {
+          PermissionStatus status = await Permission.locationAlways.request();
+          if (status.isDenied || status.isPermanentlyDenied) {
+            _showSnackbar('Izin lokasi latar belakang ditolak. Pelacakan berkala tidak akan aktif.');
+            return;
+          }
+        } else {
+           _showSnackbar('Izin lokasi latar belakang tidak diberikan. Pelacakan berkala tidak akan aktif.');
+           return;
+        }
+      } else if (Theme.of(context).platform == TargetPlatform.iOS &&
+                 (await Permission.locationAlways.isDenied || await Permission.locationAlways.isRestricted)) {
+        PermissionStatus status = await Permission.locationAlways.request();
+        if (status.isDenied || status.isPermanentlyDenied) {
+          _showSnackbar('Izin lokasi latar belakang ditolak. Pelacakan berkala tidak akan aktif.');
+          return;
+        }
+      }
+
+
+      // 4. Jika semua izin lokasi yang diperlukan sudah diberikan, jadwalkan tugas Workmanager
+      await Workmanager().registerPeriodicTask(
+        "updateLocationTaskUniqueId",
+        "updateLocationTask", 
+        frequency: const Duration(minutes: 5), // setiap 5 menit
+        initialDelay: const Duration(seconds: 10),
+        constraints: Constraints(
+          networkType: NetworkType.connected, 
+          requiresBatteryNotLow: false,
+        ),
+      );
+      _showSnackbar('Pelacakan lokasi berkala berhasil diaktifkan (setiap 5 menit).');
+      print('[LoginScreen] Workmanager task registered successfully with 5-minute frequency.');
+
+    } catch (e) {
+      print('[LoginScreen] Error requesting location permissions or scheduling task: ${e.toString()}');
+      _showSnackbar('Gagal mengaktifkan pelacakan lokasi berkala: ${e.toString()}');
+    }
+  }
+  // =========================================================================
+
+  /// function for login
   Future<void> _login() async {
     final password = passwordController.text.trim();
     final email = emailController.text.trim();
@@ -131,13 +214,17 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[LoginScreen] Login berhasil untuk User ID: $userId');
 
       await _updateUserLocationAndProfile(userId);
-      print(
-          '[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
+      print('[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
+
+      // Panggil fungsi untuk meminta izin latar belakang dan menjadwalkan tugas
+      await _requestLocationPermissionsAndScheduleTask(); // <-- Panggilan ini yang penting!
+      print('[LoginScreen] Fungsi _requestLocationPermissionsAndScheduleTask selesai dipanggil.');
 
       Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-              builder: (context) => const HomePage()));
+              builder: (context) =>
+                  const HomePage()));
       _showSnackbar('Login berhasil!');
     } on AuthException catch (e) {
       print('[LoginScreen] Auth Error: ${e.message}');
@@ -174,8 +261,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.bold,
                     color: Colors.orange)),
             const SizedBox(height: 20),
-
-            // Email
             TextField(
               controller: emailController,
               decoration: InputDecoration(
@@ -186,8 +271,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Password
             TextField(
               controller: passwordController,
               decoration: InputDecoration(
@@ -199,8 +282,6 @@ class _LoginScreenState extends State<LoginScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 20),
-
-            // Login Button
             ElevatedButton(
               onPressed: () {
                 _login();
@@ -217,12 +298,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   : const Text(
                       "Login",
                       style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          TextStyle(fontSize: 23, fontWeight: FontWeight.bold),
                     ),
             ),
             const SizedBox(height: 10),
-
-            // Sign Up
             MouseRegion( 
               onEnter: (_) => setState(() => _isHoveringSignUp = true),
               onExit: (_) => setState(() => _isHoveringSignUp = false),
