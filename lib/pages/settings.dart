@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
-import 'package:project_caps/pages/login.dart'; // Ganti dengan path ke halaman login Anda
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:project_caps/pages/login.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -22,10 +23,18 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadUserProfile();
   }
 
+
   Future<void> _signOut() async {
     try {
+      // 1. Logout dari Supabase
       await _supabase.auth.signOut();
 
+      // 2. Set status login ke false di SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isLoggedIn', false);
+
+      // 3. Navigasi ke halaman Login
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const LoginScreen()),
         (route) => false,
@@ -37,6 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
       print('Error signing out: ${e.toString()}');
     }
   }
+
 
   Future<void> _loadUserProfile() async {
     final user = _supabase.auth.currentUser;

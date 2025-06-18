@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/gestures.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -131,6 +132,8 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[LoginScreen] Login berhasil untuk User ID: $userId');
 
       await _updateUserLocationAndProfile(userId);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isLoggedIn', true);
       print(
           '[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
 
