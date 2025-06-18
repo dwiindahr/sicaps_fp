@@ -5,8 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/gestures.dart';
-import 'package:workmanager/workmanager.dart'; 
-import 'package:permission_handler/permission_handler.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -214,11 +212,8 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[LoginScreen] Login berhasil untuk User ID: $userId');
 
       await _updateUserLocationAndProfile(userId);
-      print('[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
-
-      // Panggil fungsi untuk meminta izin latar belakang dan menjadwalkan tugas
-      await _requestLocationPermissionsAndScheduleTask(); // <-- Panggilan ini yang penting!
-      print('[LoginScreen] Fungsi _requestLocationPermissionsAndScheduleTask selesai dipanggil.');
+      print(
+          '[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
 
       Navigator.pushReplacement(
           context,
