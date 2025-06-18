@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:project_caps/pages/register.dart';
 import 'package:project_caps/pages/home.dart';
@@ -5,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/gestures.dart';
+import 'package:workmanager/workmanager.dart'; // <-- Pastikan ini ada
+import 'package:permission_handler/permission_handler.dart'; // <-- Pastikan ini ada
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   TextEditingController passwordController = TextEditingController();
   final supabase = Supabase.instance.client;
   bool isLoading = false;
-  bool _isHoveringSignUp = false; // New state variable for hover effect
+  bool _isHoveringSignUp = false;
 
   void _showSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
           place.locality,
           place.administrativeArea,
           place.country
-        ].where((element) => element != null && element!.isNotEmpty).join(', ');
+        ].where((element) => element != null && element.isNotEmpty).join(', ');
       }
       print(
           '[_updateUserLocationAndProfile] Alamat terformat: $formattedAddress');
@@ -112,19 +115,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // =========================================================================
-  // FUNGSI BARU: Meminta Izin Lokasi Latar Belakang & Menjadwalkan Workmanager
+  // FUNGSI Meminta Izin Lokasi Latar Belakang & Menjadwalkan Workmanager
   // =========================================================================
   Future<void> _requestLocationPermissionsAndScheduleTask() async {
     print('[LoginScreen] Meminta izin lokasi dan menjadwalkan tugas Workmanager.');
     try {
-      // 1. Cek apakah layanan lokasi diaktifkan di perangkat
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showSnackbar('Layanan lokasi dinonaktifkan. Mohon aktifkan di pengaturan perangkat Anda.');
         return;
       }
 
-      // 2. Meminta izin lokasi utama (WhenInUse atau Always, tergantung OS & pilihan awal)
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -134,10 +135,8 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-      // 3. KHUSUS untuk ACCESS_BACKGROUND_LOCATION (Android 10+ / API 29+) dan iOS 'Always'
       if (Theme.of(context).platform == TargetPlatform.android &&
           (await Permission.locationAlways.isDenied || await Permission.locationAlways.isRestricted)) {
-        // Tampilkan dialog penjelasan kepada pengguna mengapa izin "Always" diperlukan
         bool? userUnderstood = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -169,15 +168,13 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-
-      // 4. Jika semua izin lokasi yang diperlukan sudah diberikan, jadwalkan tugas Workmanager
       await Workmanager().registerPeriodicTask(
         "updateLocationTaskUniqueId",
-        "updateLocationTask", 
-        frequency: const Duration(minutes: 5), // setiap 5 menit
+        "updateLocationTask",
+        frequency: const Duration(minutes: 5),
         initialDelay: const Duration(seconds: 10),
         constraints: Constraints(
-          networkType: NetworkType.connected, 
+          networkType: NetworkType.connected,
           requiresBatteryNotLow: false,
         ),
       );
@@ -189,7 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
       _showSnackbar('Gagal mengaktifkan pelacakan lokasi berkala: ${e.toString()}');
     }
   }
-  // =========================================================================
 
   /// function for login
   Future<void> _login() async {
@@ -212,8 +208,16 @@ class _LoginScreenState extends State<LoginScreen> {
       print('[LoginScreen] Login berhasil untuk User ID: $userId');
 
       await _updateUserLocationAndProfile(userId);
-      print(
-          '[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
+      print('[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
+
+      // Panggil fungsi untuk meminta izin latar belakang dan menjadwalkan tugas
+      // Hanya panggil jika tidak di web (karena Workmanager tidak support web)
+      // Ini akan mencegah crash di web jika Anda menjalankan aplikasi di sana.
+      if (!kIsWeb) { // <-- TAMBAHKAN KONDISI INI
+        await _requestLocationPermissionsAndScheduleTask();
+        print('[LoginScreen] Fungsi _requestLocationPermissionsAndScheduleTask selesai dipanggil.');
+      }
+
 
       Navigator.pushReplacement(
           context,
@@ -297,7 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
             ),
             const SizedBox(height: 10),
-            MouseRegion( 
+            MouseRegion(
               onEnter: (_) => setState(() => _isHoveringSignUp = true),
               onExit: (_) => setState(() => _isHoveringSignUp = false),
               child: RichText(
@@ -309,10 +313,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       text: "Sign Up",
                       style: TextStyle(
                         fontSize: 18,
-                        color: _isHoveringSignUp 
-                            ? const Color.fromARGB(255, 192, 84, 1) 
-                            : const Color.fromARGB(255, 235, 116, 25), 
-                        fontWeight: FontWeight.bold
+                        color: _isHoveringSignUp
+                            ? const Color.fromARGB(255, 192, 84, 1)
+                            : const Color.fromARGB(255, 235, 116, 25),
+                        fontWeight: FontWeight.bold,
                       ),
                       recognizer: TapGestureRecognizer()
                         ..onTap = () {

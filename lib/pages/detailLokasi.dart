@@ -302,7 +302,7 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
                     print('[LocationDetailPage] Tombol Re-center ditekan.');
                     GeoPoint targetPoint = GeoPoint(
                       latitude: displayMember!.latitude!,
-                      longitude: displayMember!.longitude!,
+                      longitude: displayMember.longitude!,
                     );
                     await mapController.moveTo(targetPoint);
                     await mapController.setZoom(zoomLevel: 15.0);
