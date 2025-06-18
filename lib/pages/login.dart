@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:project_caps/pages/register.dart';
-import 'package:project_caps/pages/home.dart'; // Pastikan ini halaman utama Anda
+import 'package:project_caps/pages/home.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:geolocator/geolocator.dart'; // Import geolocator
-import 'package:geocoding/geocoding.dart'; // Import geocoding
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:flutter/gestures.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   TextEditingController passwordController = TextEditingController();
   final supabase = Supabase.instance.client;
   bool isLoading = false;
+  bool _isHoveringSignUp = false; // New state variable for hover effect
 
   void _showSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -24,12 +26,10 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- FUNGSI _updateUserLocationAndProfile YANG DIPERBAIKI ---
   Future<void> _updateUserLocationAndProfile(String userId) async {
     print(
         '[_updateUserLocationAndProfile] Memulai proses update lokasi untuk userId: $userId');
     try {
-      // 1. Cek apakah layanan lokasi diaktifkan
       bool serviceEnabled;
       LocationPermission permission;
 
@@ -39,57 +39,49 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!serviceEnabled) {
         _showSnackbar(
             'Layanan lokasi dinonaktifkan. Mohon aktifkan di pengaturan perangkat Anda.');
-        return; // Keluar jika layanan tidak aktif
+        return;
       }
 
-      // 2. Cek status izin lokasi saat ini dan minta jika ditolak
       permission = await Geolocator.checkPermission();
       print(
           '[_updateUserLocationAndProfile] Status izin lokasi saat ini: $permission');
 
       if (permission == LocationPermission.denied) {
-        // Jika izin ditolak, minta izin dari pengguna
         print(
             '[_updateUserLocationAndProfile] Izin ditolak, meminta izin dari pengguna...');
-        permission = await Geolocator
-            .requestPermission(); // <--- INI PANGGILAN YANG HILANG!
+        permission = await Geolocator.requestPermission();
         print(
             '[_updateUserLocationAndProfile] Status izin setelah permintaan: $permission');
 
         if (permission == LocationPermission.denied) {
           _showSnackbar(
               'Izin lokasi ditolak. Fitur lokasi otomatis mungkin tidak berfungsi.');
-          return; // Keluar jika izin tetap ditolak setelah permintaan
+          return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        // Jika izin ditolak permanen, informasikan pengguna untuk mengubah di pengaturan
         print('[_updateUserLocationAndProfile] Izin lokasi ditolak permanen.');
         _showSnackbar(
             'Izin lokasi ditolak secara permanen. Silakan ubah di pengaturan aplikasi.');
-        return; // Keluar jika izin ditolak permanen
+        return;
       }
 
-      // 3. Dapatkan posisi saat ini (hanya jika izin sudah diberikan)
       print(
           '[_updateUserLocationAndProfile] Izin diberikan. Mencoba mendapatkan posisi GPS...');
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high, // Akurasi tinggi
+        desiredAccuracy: LocationAccuracy.high,
       );
       print(
           '[_updateUserLocationAndProfile] Posisi didapatkan: ${position.latitude}, ${position.longitude}');
 
-      // 4. Reverse Geocoding: Konversi koordinat menjadi alamat
       print('[_updateUserLocationAndProfile] Melakukan reverse geocoding...');
       List<Placemark> placemarks = await placemarkFromCoordinates(
           position.latitude, position.longitude,
-          localeIdentifier: "id_ID" // Opsional: untuk bahasa Indonesia
-          );
+          localeIdentifier: "id_ID");
 
       String formattedAddress = "Lokasi tidak diketahui";
       if (placemarks.isNotEmpty) {
-        // Gabungkan komponen alamat yang ada dan tidak null/kosong
         Placemark place = placemarks[0];
         formattedAddress = [
           place.street,
@@ -102,7 +94,6 @@ class _LoginScreenState extends State<LoginScreen> {
       print(
           '[_updateUserLocationAndProfile] Alamat terformat: $formattedAddress');
 
-      // 5. Perbarui profil pengguna di Supabase
       print(
           '[_updateUserLocationAndProfile] Memperbarui profil di Supabase...');
       await supabase.from('profiles').update({
@@ -110,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
         'longitude': position.longitude,
         'location': formattedAddress,
         'lastUpdated': DateTime.now().toIso8601String(),
-      }).eq('id', userId); // Menggunakan userId yang dilewatkan
+      }).eq('id', userId);
       print(
           '[_updateUserLocationAndProfile] Lokasi profil berhasil diperbarui di Supabase.');
     } catch (e) {
@@ -119,9 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _showSnackbar('Gagal memperbarui lokasi otomatis: ${e.toString()}');
     }
   }
-  // -------------------------------------------------------------------
 
-  /// function for login (tidak ada perubahan signifikan di sini)
   Future<void> _login() async {
     final password = passwordController.text.trim();
     final email = emailController.text.trim();
@@ -141,17 +130,14 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       print('[LoginScreen] Login berhasil untuk User ID: $userId');
 
-      // Setelah login berhasil, panggil fungsi update lokasi dan profil
       await _updateUserLocationAndProfile(userId);
       print(
           '[LoginScreen] Fungsi _updateUserLocationAndProfile selesai dipanggil.');
 
-      // Navigasi ke halaman utama aplikasi
       Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-              builder: (context) =>
-                  const HomePage())); // Pastikan HomePage adalah const
+              builder: (context) => const HomePage()));
       _showSnackbar('Login berhasil!');
     } on AuthException catch (e) {
       print('[LoginScreen] Auth Error: ${e.message}');
@@ -188,19 +174,33 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.bold,
                     color: Colors.orange)),
             const SizedBox(height: 20),
+
+            // Email
             TextField(
               controller: emailController,
-              decoration: const InputDecoration(
-                  labelText: "Email", border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: "Email",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
             ),
             const SizedBox(height: 10),
+
+            // Password
             TextField(
               controller: passwordController,
-              decoration: const InputDecoration(
-                  labelText: "Password", border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: "Password",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
               obscureText: true,
             ),
             const SizedBox(height: 20),
+
+            // Login Button
             ElevatedButton(
               onPressed: () {
                 _login();
@@ -210,28 +210,49 @@ class _LoginScreenState extends State<LoginScreen> {
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                      borderRadius: BorderRadius.circular(100)),
                   side: const BorderSide(width: 2, color: Colors.orange)),
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : const Text(
                       "Login",
                       style:
-                          TextStyle(fontSize: 23, fontWeight: FontWeight.bold),
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const SignupScreen()));
-              },
-              child: const Text(
-                "Don't have an account? Sign Up",
-                style: TextStyle(fontSize: 18, color: Colors.black),
+            const SizedBox(height: 10),
+
+            // Sign Up
+            MouseRegion( 
+              onEnter: (_) => setState(() => _isHoveringSignUp = true),
+              onExit: (_) => setState(() => _isHoveringSignUp = false),
+              child: RichText(
+                text: TextSpan(
+                  text: "Don't have an account? ",
+                  style: const TextStyle(fontSize: 18, color: Colors.black),
+                  children: [
+                    TextSpan(
+                      text: "Sign Up",
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: _isHoveringSignUp 
+                            ? const Color.fromARGB(255, 192, 84, 1) 
+                            : const Color.fromARGB(255, 235, 116, 25), 
+                        fontWeight: FontWeight.bold
+                      ),
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const SignupScreen()),
+                          );
+                        },
+                    ),
+                  ],
+                ),
               ),
-            )
+            ),
           ],
         ),
       ),

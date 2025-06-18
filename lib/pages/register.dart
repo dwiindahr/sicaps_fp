@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:project_caps/pages/login.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/gestures.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -21,6 +22,7 @@ class _SignupScreenState extends State<SignupScreen> {
   TextEditingController dateOfBirthController = TextEditingController();
 
   bool isLoading = false;
+  bool _isHoveringLogin = false;
 
   final supabase = Supabase.instance.client;
 
@@ -129,28 +131,41 @@ class _SignupScreenState extends State<SignupScreen> {
                 // Name
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
-                      labelText: "Full Name", border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: "Full Name", 
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 10),
 
                 // Email
                 TextField(
                   controller: emailController,
-                  decoration: const InputDecoration(
-                      labelText: "Email", border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: "Email",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 10),
 
                 // Password
                 TextField(
                   controller: passwordController,
+                  decoration: InputDecoration(
+                    labelText: "Password",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
                   obscureText: true,
-                  decoration: const InputDecoration(
-                      labelText: "Password", border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 20),
 
+                // Sign Up Button
                 ElevatedButton(
                   onPressed: () {
                     _signup();
@@ -160,26 +175,47 @@ class _SignupScreenState extends State<SignupScreen> {
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 50),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6)),
+                          borderRadius: BorderRadius.circular(100)),
                       side: const BorderSide(width: 2, color: Colors.orange)),
                   child: isLoading
                       ? const Center(child: CircularProgressIndicator())
                       : const Text(
                           "Sign Up ",
                           style: TextStyle(
-                              fontSize: 23, fontWeight: FontWeight.bold),
+                              fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                 ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => const LoginScreen()),
-                    );
-                  },
-                  child: const Text(
-                    "Already have an account? Login",
-                    style: TextStyle(fontSize: 18, color: Colors.black),
+                const SizedBox(height: 10),
+                
+                // Sign In
+                MouseRegion( 
+                  onEnter: (_) => setState(() => _isHoveringLogin = true),
+                  onExit: (_) => setState(() => _isHoveringLogin = false),
+                  child: RichText(
+                    text: TextSpan(
+                      text: "Already have an account? ",
+                      style: const TextStyle(fontSize: 18, color: Colors.black),
+                      children: [
+                        TextSpan(
+                          text: "Login",
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: _isHoveringLogin
+                                ? const Color.fromARGB(255, 192, 84, 1) 
+                                : const Color.fromARGB(255, 235, 116, 25), 
+                            fontWeight: FontWeight.bold
+                          ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => const LoginScreen()),
+                              );
+                            },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],

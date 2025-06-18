@@ -123,8 +123,16 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Detail Lokasi'),
+        backgroundColor: Colors.white,
+        leading: IconButton( // <-- Tambahkan bagian ini
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
       ),
       body: Column(
         children: [

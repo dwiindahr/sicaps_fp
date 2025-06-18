@@ -35,9 +35,6 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
 
   @override
   void dispose() {
-    // Pastikan untuk membatalkan langganan stream saat widget di-dispose
-    // Pada versi supabase_flutter yang lebih baru, stream().listen() mengembalikan StreamSubscription.
-    // Jika Anda ingin mengelola disposal secara eksplisit, simpan StreamSubscription dan panggil .cancel() di dispose.
     super.dispose();
   }
 
@@ -237,45 +234,7 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: Colors.black,
-        actions: [
-          Stack(
-            // Gunakan Stack untuk badge notifikasi
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none),
-                onPressed: () {
-                  _showSnackbar('Notifikasi ditekan!');
-                },
-              ),
-              if (incomingRelationRequests.isNotEmpty)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 12,
-                      minHeight: 12,
-                    ),
-                    child: Text(
-                      '${incomingRelationRequests.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 8,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
+        foregroundColor: Colors.black,      ),
       body: Column(
         children: [
           Padding(
@@ -298,10 +257,12 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
                     _fetchData(); // Panggil _fetchData untuk refresh kedua daftar setelah kembali
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
+                    backgroundColor:
+                        const Color.fromARGB(255, 255, 102, 0), // Warna background tetap orange
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius:
+                          BorderRadius.circular(100), // Border radius circular 100
                     ),
                   ),
                   child: const Text(
@@ -320,10 +281,12 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
                     _fetchData(); // Panggil _fetchData untuk refresh kedua daftar setelah kembali
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueGrey,
+                    backgroundColor:
+                        Colors.blueGrey, // Warna tombol ini tetap blueGrey
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius:
+                          BorderRadius.circular(100), // Border radius circular 100
                     ),
                   ),
                   child: Text(
@@ -331,66 +294,70 @@ class _LiveTrackerPageState extends State<LiveTrackerPage> {
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(
+                    height:
+                        16), // Pertahankan SizedBox ini jika ingin jarak di bawah teks penjelasan
               ],
             ),
           ),
           _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : _errorMessage != null
-                  ? Center(child: Text(_errorMessage!))
-                  : Expanded(
-                      child: RefreshIndicator(
-                        onRefresh:
-                            _fetchData, // Memuat ulang data saat pull-to-refresh
-                        child: familyMembers.isEmpty
-                            ? const Center(
-                                child: Text(
-                                    'Belum ada relasi keluarga yang aktif.'))
-                            : ListView.builder(
-                                itemCount: familyMembers.length,
-                                itemBuilder: (context, index) {
-                                  final member = familyMembers[index];
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16.0, vertical: 8.0),
-                                    child: OutlinedButton(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                LocationDetailPage(
-                                                    member: member),
-                                          ),
-                                        );
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        side: BorderSide(
-                                            color: Colors.grey[300]!, width: 1),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
+                  : _errorMessage != null
+                      ? Center(child: Text(_errorMessage!))
+                      : Expanded(
+                          child: RefreshIndicator(
+                            onRefresh:
+                                _fetchData, // Memuat ulang data saat pull-to-refresh
+                            child: familyMembers.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                        'Belum ada relasi keluarga yang aktif.'))
+                                : ListView.builder(
+                                    itemCount: familyMembers.length,
+                                    itemBuilder: (context, index) {
+                                      final member = familyMembers[index];
+                                      return Padding(
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: 16.0, horizontal: 12.0),
-                                        backgroundColor: Colors.white,
-                                      ),
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(
-                                          member.name,
-                                          style: const TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.black),
+                                            horizontal: 16.0, vertical: 8.0),
+                                        child: OutlinedButton(
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    LocationDetailPage(
+                                                        member: member),
+                                              ),
+                                            );
+                                          },
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(
+                                                color: Colors.grey[300]!,
+                                                width: 1),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 16.0,
+                                                horizontal: 12.0),
+                                            backgroundColor: Colors.white,
+                                          ),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              member.name,
+                                              style: const TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.black),
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                    ),
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ),
         ],
       ),
     );

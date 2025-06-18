@@ -5,36 +5,32 @@ import 'package:project_caps/pages/login.dart'; // Ganti dengan path ke halaman 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
-  // Ubah menjadi StatefulWidget
   @override
   _SettingsPageState createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  // Anda bisa menambahkan variabel untuk data profil dinamis di sini jika diperlukan
-  // String _userName = 'Loading...';
-  // String _userEmail = 'Loading...';
+  String _userName = 'Memuat...';
+  String _userEmail = 'Memuat...';
+
+  late final SupabaseClient _supabase;
 
   @override
   void initState() {
     super.initState();
-    // Jika Anda ingin menampilkan nama/email pengguna yang login:
-    // _loadUserProfile();
+    _supabase = Supabase.instance.client;
+    _loadUserProfile();
   }
 
-  // Fungsi untuk melakukan logout
   Future<void> _signOut() async {
     try {
-      await Supabase.instance.client.auth.signOut();
-      // Setelah logout berhasil, arahkan ke halaman login dan hapus semua rute sebelumnya
+      await _supabase.auth.signOut();
+
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-            builder: (context) =>
-                const LoginScreen()), // Pastikan LoginPage ada dan path-nya benar
-        (route) => false, // Hapus semua rute dari stack navigasi
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
       );
     } catch (e) {
-      // Tampilkan Snackbar jika ada error saat logout
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal logout: ${e.toString()}')),
       );
@@ -42,90 +38,98 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // Opsional: Fungsi untuk memuat data profil pengguna yang login
-  // Jika Anda ingin nama dan email di bagian profil dinamis
-  // Future<void> _loadUserProfile() async {
-  //   final user = Supabase.instance.client.auth.currentUser;
-  //   if (user != null) {
-  //     // Jika profil disimpan di tabel 'profiles' dan id-nya sama dengan user.id
-  //     final response = await Supabase.instance.client
-  //         .from('profiles')
-  //         .select('name, email')
-  //         .eq('id', user.id)
-  //         .single();
-  //     if (mounted) {
-  //       setState(() {
-  //         _userName = response['name'] as String? ?? 'Nama Pengguna';
-  //         _userEmail = response['email'] as String? ?? user.email ?? 'Tidak ada email';
-  //       });
-  //     }
-  //   } else {
-  //     if (mounted) {
-  //       setState(() {
-  //         _userName = 'Pengguna Tamu';
-  //         _userEmail = 'Tidak login';
-  //       });
-  //     }
-  //   }
-  // }
+  Future<void> _loadUserProfile() async {
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      try {
+        final response = await _supabase
+            .from('profiles')
+            .select('name, email')
+            .eq('id', user.id)
+            .single();
+
+        if (mounted) {
+          setState(() {
+            _userName = response['name'] as String? ?? 'Nama Tidak Diketahui';
+            _userEmail = response['email'] as String? ??
+                user.email ??
+                'Email Tidak Diketahui';
+          });
+        }
+      } catch (e) {
+        print('Error loading user profile: $e');
+        if (mounted) {
+          setState(() {
+            _userName = 'Error Memuat';
+            _userEmail = 'Error Memuat';
+          });
+        }
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _userName = 'Pengguna Tamu';
+          _userEmail = 'Tidak login';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Background is white
+      backgroundColor: Colors.white, // Background Scaffold jadi abu-abu muda
       appBar: AppBar(
         title: const Text(
           'Settings',
           style: TextStyle(
-            color: Colors.black, // Title text color
-            fontWeight: FontWeight.normal, // Matches the image, not bold
+            color: Colors.black,
+            fontWeight: FontWeight.normal,
           ),
-        ),
-        backgroundColor: Colors.white, // AppBar background is white
-        elevation: 0, // No shadow
-        foregroundColor: Colors.black, // Back button color
+        ), 
+        backgroundColor: Colors.white, // AppBar tetap putih
+        elevation: 0,
+        foregroundColor: Colors.black,
       ),
       body: Column(
-        // Use Column to structure the entire body
         children: [
           Expanded(
             child: ListView(
-              padding:
-                  const EdgeInsets.all(16.0), // Padding around the entire list
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 24.0), // Padding disesuaikan untuk spacing Card
               children: [
                 // === Bagian Profil ===
                 Padding(
-                  padding: const EdgeInsets.only(
-                      bottom: 24.0), // Space below profile section
+                  padding: const EdgeInsets.only(bottom: 24.0),
                   child: Row(
                     children: [
-                      // Circular profile image placeholder
-                      Container(
+                      Container( // Ganti Container ini untuk menampilkan gambar
                         width: 70,
                         height: 70,
                         decoration: BoxDecoration(
-                          color: Colors.grey[300], // Light grey circle
                           shape: BoxShape.circle,
+                          color: Colors.grey[300], 
+                          image: const DecorationImage(
+                            image: AssetImage('assets/images/profile-mecca.png'),
+                            fit: BoxFit.cover, // Agar gambar mengisi seluruh lingkaran
+                          ),
                         ),
-                        // Anda mungkin menambahkan Image.network di sini untuk gambar profil dinamis
-                        // child: _userProfileImageUrl != null ? Image.network(_userProfileImageUrl) : null,
                       ),
-                      const SizedBox(
-                          width: 16), // Space between circle and text
-                      const Column(
+                      const SizedBox(width: 16),
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Ubah menjadi non-const jika ingin dinamis
                           Text(
-                            'Lorem Ipsum', // Ganti dengan _userName jika dinamis
-                            style: TextStyle(
+                            _userName,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Text(
-                            'loremipsum@gmail.com', // Ganti dengan _userEmail jika dinamis
-                            style: TextStyle(
+                            _userEmail,
+                            style: const TextStyle(
                               fontSize: 14,
                               color: Colors.grey,
                             ),
@@ -136,59 +140,39 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
 
-                // === Bagian "Akun Saya" ===
-                const Text(
-                  'Akun Saya',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                // === Bagian Pengaturan Utama (Pengaturan Akun, Bahasa, Pusat Bantuan) ===
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4.0),
+                  decoration: BoxDecoration(
+                    color: const Color.fromARGB(255, 255, 255, 255),
+                    borderRadius: BorderRadius.circular(10.0),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _buildSettingsListItem(
+                          context, 'Pengaturan Akun', Icons.person_outline,
+                          showDivider: true),
+                      _buildSettingsListItem(context, 'Bahasa', Icons.language,
+                          showDivider: true),
+                      _buildSettingsListItem(
+                          context, 'Pusat Bantuan', Icons.help_outline,
+                          showDivider: false),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8), // Space below title
-                _buildSettingsListTile(context, 'Pengaturan Akun'),
-                _buildSettingsListTile(context, 'Aktivitas Saya'),
-                _buildSettingsListTile(context, 'Privasi & Keamanan'),
 
-                const Divider(
-                    height: 32, thickness: 1, color: Colors.grey), // Separator
+                const SizedBox(height: 24), // Spasi sebelum judul Login
 
-                // === Bagian "Umum" ===
-                const Text(
-                  'Umum',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 8), // Space below title
-                _buildSettingsListTile(context, 'Bahasa'),
-                _buildSettingsListTile(context, 'Notifikasi'),
-                _buildSettingsListTile(context, 'Kualitas Media'),
-
-                const Divider(
-                    height: 32, thickness: 1, color: Colors.grey), // Separator
-
-                // === Bagian "Bantuan" ===
-                const Text(
-                  'Bantuan',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 8), // Space below title
-                _buildSettingsListTile(context, 'Pusat Bantuan'),
-                _buildSettingsListTile(context, 'Peraturan Komunitas'),
-                _buildSettingsListTile(context, 'Kebijakan Privasi'),
-
-                const Divider(
-                    height: 32, thickness: 1, color: Colors.grey), // Separator
-
-                // === Bagian "Login" ===
-                const Text(
+                // === Bagian "Login" (dengan judul dan item keluar) ===
+                const Text( // Mengembalikan judul 'Login'
                   'Login',
                   style: TextStyle(
                     fontSize: 16,
@@ -196,20 +180,29 @@ class _SettingsPageState extends State<SettingsPage> {
                     color: Colors.black,
                   ),
                 ),
-                const SizedBox(height: 8), // Space below title
-                ListTile(
-                  title: const Text(
-                    'Keluar',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 16,
-                    ), // Red text
+                const SizedBox(height: 8), // Spasi di bawah judul Login
+
+                Container( // Bungkus item logout dalam Container terpisah
+                  margin: const EdgeInsets.symmetric(vertical: 4.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10.0),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios,
-                      size: 16, color: Colors.grey),
-                  onTap: _signOut, // <--- TERAPKAN FUNGSI LOGOUT DI SINI
-                  contentPadding: EdgeInsets.zero, // Remove default padding
-                  dense: true, // Make it a bit more compact
+                  child: _buildSettingsListItem(
+                    context,
+                    'Keluar',
+                    Icons.logout,
+                    isLogout: true,
+                    showDivider: false, // Logout tidak perlu divider
+                  ),
                 ),
               ],
             ),
@@ -219,27 +212,39 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Helper method to build consistent ListTile for settings options
-  Widget _buildSettingsListTile(BuildContext context, String title) {
-    return ListTile(
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 16,
-          color: Colors.black,
+  // Helper method untuk membangun ListTile dengan ikon dan background abu-abu
+  Widget _buildSettingsListItem(BuildContext context, String title,
+      IconData icon, {bool isLogout = false, bool showDivider = false}) {
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(icon, color: isLogout ? Colors.red : Colors.grey[700]),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              color: isLogout ? Colors.red : Colors.black,
+            ),
+          ),
+          trailing: Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: isLogout ? Colors.red : Colors.grey,
+          ),
+          onTap: isLogout ? _signOut : () {
+            print('Tapped on: $title');
+          },
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         ),
-      ),
-      trailing: const Icon(
-        Icons.arrow_forward_ios,
-        size: 16,
-        color: Colors.grey,
-      ),
-      onTap: () {
-        // Implement navigation or action for each setting
-        print('Tapped on: $title'); // For demonstration
-      },
-      contentPadding: EdgeInsets.zero, // Remove default horizontal padding
-      dense: true, // Make the list tile a bit more compact vertically
+        if (showDivider) // Tambahkan Divider jika showDivider true
+          Divider(
+            height: 1,
+            thickness: 0.5,
+            color: Colors.grey[300],
+            indent: 16, // Indentasi agar sejajar dengan teks
+            endIndent: 16, // Indentasi agar sejajar dengan teks
+          ),
+      ],
     );
   }
 }

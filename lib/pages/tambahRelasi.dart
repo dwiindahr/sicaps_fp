@@ -248,18 +248,20 @@ class _AddRelationPageState extends State<AddRelationPage> {
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
                 hintText: 'john@example.com',
+                // ==== Perubahan untuk Outline Abu-abu Circular 100 ====
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(100),
                   borderSide: BorderSide(color: Colors.grey[300]!),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(100),
                   borderSide: BorderSide(color: Colors.grey[300]!),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(100),
                   borderSide: const BorderSide(color: Colors.blue, width: 2),
                 ),
+                // ===========================================
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12.0, vertical: 12.0),
                 suffixIcon: Padding(
@@ -267,9 +269,10 @@ class _AddRelationPageState extends State<AddRelationPage> {
                   child: ElevatedButton(
                     onPressed: _sendRelationInvitation,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepOrange,
+                      backgroundColor: const Color.fromARGB(255, 255, 102, 0), // Warna background orange
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius:
+                            BorderRadius.circular(100), // Border radius circular 100
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     ),
